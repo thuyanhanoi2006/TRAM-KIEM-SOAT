@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TRẠM KIỂM SOÁT ĐỘC LẬP</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+      body { margin: 0; padding: 0; background: #000; font-family: 'Arial', sans-serif; text-align: center; color: white; }
+      #start-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+      #btn-start { padding: 25px 50px; font-size: 24px; background: #008000; color: white; border: 3px solid #00FF00; border-radius: 50px; font-weight: bold; cursor: pointer; box-shadow: 0 0 30px #00FF00; text-transform: uppercase; animation: pulse 1.5s infinite; }
+      @keyframes pulse { 0% {transform: scale(1);} 50% {transform: scale(1.05);} 100% {transform: scale(1);} }
+      
+      .main-ui { display: none; max-width: 600px; margin: 0 auto; padding: 10px; }
+      .control-panel { background: #222; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #444; }
+      label { display: block; text-align: left; color: #ccc; font-weight: bold; margin-bottom: 5px; font-size: 14px;}
+      select, input[type="date"] { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; background: #333; color: white; border: 1px solid #555; border-radius: 5px; outline: none; margin-bottom: 10px; box-sizing: border-box;}
+      
+      #scanner-container { position: relative; width: 100%; max-width: 500px; height: 350px; margin: 0 auto 15px auto; border: 3px solid #555; border-radius: 10px; overflow: hidden; background: #111; transition: border-color 0.2s;}
+      #video { width: 100%; height: 100%; object-fit: cover; display: block; }
+      
+      /* KHUNG NGẮM MỞ RỘNG (86%) - Gọn gàng và tĩnh lặng */
+      #scan-region { 
+        position: absolute; top: 7%; left: 7%; width: 86%; height: 86%; 
+        border: 2px solid rgba(255, 255, 255, 0.4); border-radius: 15px; 
+        box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6); pointer-events: none; 
+      }
+
+      #status-popup { position: fixed; top: 15%; left: 50%; transform: translate(-50%, 0); width: 90%; max-width: 400px; padding: 20px; border-radius: 15px; color: white; z-index: 1000; display: none; box-shadow: 0 10px 50px rgba(0,0,0,0.9); border: 2px solid #555; }
+      .icon-large { font-size: 60px; display: block; margin-bottom: 10px; }
+      #popup-msg { font-size: 22px; font-weight: bold; line-height: 1.3; text-transform: uppercase; }
+      #debug-voice { font-size: 14px; color: #aaa; margin-top: 10px; font-style: italic; }
+      
+      .input-manual { display: flex; gap: 5px; margin-top: 10px; }
+      #manualInput { flex: 1; padding: 15px; font-size: 18px; border-radius: 5px; border: none; font-weight: bold; text-align: center; text-transform: uppercase; }
+      .btn-send { padding: 0 20px; font-size: 18px; background: #008000; color: white; border: none; border-radius: 5px; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div id="start-screen">
+      <h1 style="color:#00FF00; font-size:30px; margin-bottom:10px;">TRẠM KIỂM SOÁT</h1>
+      <p style="color:#aaa; font-size:14px; margin-bottom: 30px;">(Tốc độ siêu tốc - Chống lặp mã)</p>
+      <button id="btn-start" onclick="startSystem()">🎥 BẬT MÁY ẢNH</button>
+    </div>
+
+    <div id="status-popup">
+      <span id="popup-icon" class="icon-large"></span>
+      <div id="popup-msg"></div>
+      <div id="debug-voice"></div>
+    </div>
+
+    <div class="main-ui" id="ui">
+      <h3 style="color:#00FF00; margin-top:0;">📡 HỆ THỐNG ĐANG QUÉT</h3>
+      <div class="control-panel">
+        <label>NGÀY QUÉT MÃ:</label>
+        <input type="date" id="scanDate">
+
+        <label>CHỌN NHIỆM VỤ THỰC THI:</label>
+        <select id="eventSelect">
+          <option value="DIEM_DANH_NGAY" selected>📅 1. ĐIỂM DANH NGÀY</option>
+          <option value="VE_TRANH_THU">🏃 2. VỀ NGHỈ TRANH THỦ THỨ 7</option>
+          <option value="LEN_DON_VI">🎒 3. LÊN ĐƠN VỊ CHỦ NHẬT</option>
+          <option value="VE_TU_TUC_T7">🏡 4. VỀ TỰ TÚC PHƯƠNG TIỆN THỨ 7</option>
+          <option value="VE_TU_TUC_CN">🏡 5. VỀ TỰ TÚC CHỦ NHẬT</option>
+        </select>
+      </div>
+
+      <div id="scanner-container">
+        <video id="video" autoplay muted playsinline></video>
+        <div id="scan-region"></div>
+      </div>
+      
+      <canvas id="hidden-canvas" style="display:none;"></canvas>
+      
+      <div class="input-manual">
+        <input type="text" id="manualInput" placeholder="NHẬP MÃ BẰNG TAY..." onkeydown="if(event.key==='Enter') handleManual()">
+        <button class="btn-send" onclick="handleManual()">OK</button>
+      </div>
+    </div>
+    
+    <script>
+      // =========================================================================
+      // DÁN ĐƯỜNG LINK WEB APP GOOGLE SCRIPT CỦA BẠN VÀO ĐÂY (Link đuôi /exec)
+      // =========================================================================
+      const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbwnDumAjyXNfoN2gWDQjRta97h4qrSllm3MnUwCEfg43RBRndAvE0KalRUZbnKS6LlShg/exec";
+
+      var video = document.getElementById("video");
+      var isScanning = false;
+      var scanRequestId = null;
+      var currentStream = null;
+      
+      // BỘ NHỚ CHỐNG QUÉT TRÙNG (Lưu mã vừa quét)
+      var lastScannedCode = "";
+      var lastScanTime = 0;
+      
+      var hiddenCanvas = document.getElementById("hidden-canvas");
+      var hiddenCtx = hiddenCanvas.getContext("2d", { willReadFrequently: true });
+      
+      var tzOffset = (new Date()).getTimezoneOffset() * 60000;
+      var todayLocal = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
+      document.getElementById('scanDate').value = todayLocal;
+
+      function startSystem() {
+        try { var ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch(e) {}
+        
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+          .then(function(stream) { startStream(stream); })
+          .catch(function(err) {
+              navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) { startStream(stream); })
+                .catch(function(err2) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
+          });
+      }
+
+      function startStream(stream) {
+          document.getElementById('start-screen').style.display = 'none'; 
+          document.getElementById('ui').style.display = 'block';
+          try { speak("Sẵn sàng quét mã."); } catch(e) {}
+          
+          currentStream = stream;
+          video.srcObject = stream;
+          video.setAttribute("playsinline", true); 
+          video.play().then(() => {
+              scanRequestId = requestAnimationFrame(tick);
+          });
+      }
+
+      function tick() {
+        if (isScanning) return; 
+
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            var scanWidth = 400; 
+            var ratio = video.videoWidth / scanWidth;
+            var scanHeight = Math.floor(video.videoHeight / ratio);
+            
+            hiddenCanvas.width = scanWidth;
+            hiddenCanvas.height = scanHeight;
+            
+            hiddenCtx.drawImage(video, 0, 0, scanWidth, scanHeight);
+            var imageData = hiddenCtx.getImageData(0, 0, scanWidth, scanHeight);
+            
+            var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+            
+            if (code && code.data !== "") {
+                // CƠ CHẾ CHỐNG LẶP MÃ (Bỏ qua nếu quét lại cùng 1 mã trong vòng 5 giây)
+                var now = new Date().getTime();
+                if (code.data === lastScannedCode && (now - lastScanTime < 5000)) {
+                    scanRequestId = requestAnimationFrame(tick);
+                    return; 
+                }
+                
+                // Mã hợp lệ -> Tiến hành khóa máy
+                lastScannedCode = code.data;
+                lastScanTime = now;
+                isScanning = true;
+                
+                video.pause(); // Đóng băng Camera
+                var container = document.getElementById('scanner-container');
+                container.style.borderColor = "#FFF";
+                setTimeout(() => container.style.borderColor = "#555", 300);
+
+                beep();
+                handleProcess(code.data);
+                return;
+            }
+        }
+        if (!isScanning) scanRequestId = requestAnimationFrame(tick);
+      }
+
+      function handleManual() { 
+        var val = document.getElementById('manualInput').value; 
+        if(val) { 
+            beep(); 
+            isScanning = true; 
+            video.pause(); 
+            handleProcess(val); 
+        }
+      }
+      
+      function handleProcess(code) {
+        showPopup('loading', 'Đang ghi dữ liệu...');
+        var evt = document.getElementById('eventSelect').value;
+        var dateStr = document.getElementById('scanDate').value;
+        
+        if (!dateStr) { alert("Vui lòng chọn ngày!"); resumeScanning(); return; }
+        
+        var apiUrl = GOOGLE_API_URL + "?api=scan&msv=" + encodeURIComponent(code) + "&eventCode=" + encodeURIComponent(evt) + "&dateStr=" + encodeURIComponent(dateStr);
+        
+        fetch(apiUrl)
+            .then(response => response.json())
+            .then(res => {
+                if(res.success) { showPopup('success', res.message); } else { showPopup('error', res.message); }
+                if(res.debugText) document.getElementById('debug-voice').innerText = "🔊 " + res.debugText;
+                if(res.audio) speak(res.audio);
+                
+                setTimeout(() => { 
+                    hidePopup(); 
+                    document.getElementById('manualInput').value = ''; 
+                    resumeScanning(); 
+                }, 2500);
+            })
+            .catch(err => {
+                showPopup('error', 'LỖI MẠNG HOẶC SAI LINK API'); 
+                setTimeout(() => { hidePopup(); resumeScanning(); }, 3000); 
+            });
+      }
+
+      function resumeScanning() {
+          isScanning = false;
+          if (currentStream) {
+              var container = document.getElementById('scanner-container');
+              container.style.borderColor = "#555"; 
+              video.play(); // Rã băng Camera
+              scanRequestId = requestAnimationFrame(tick); 
+          }
+      }
+
+      function showPopup(type, msg) {
+        var p = document.getElementById('status-popup'); var icon = document.getElementById('popup-icon'); var txt = document.getElementById('popup-msg');
+        p.style.display = 'block'; txt.innerHTML = msg; document.getElementById('debug-voice').innerText = "";
+        if(type=='loading') { icon.innerHTML = '⏳'; p.style.background = 'rgba(0,0,0,0.85)'; }
+        if(type=='success') { icon.innerHTML = '✅'; p.style.background = '#006400'; }
+        if(type=='error')   { icon.innerHTML = '⛔'; p.style.background = '#8B0000'; }
+      }
+      function hidePopup() { document.getElementById('status-popup').style.display = 'none'; }
+      function speak(text) { window.speechSynthesis.cancel(); var msg = new SpeechSynthesisUtterance(text); msg.lang = 'vi-VN'; msg.rate = 1.1; window.speechSynthesis.speak(msg); }
+      function beep() { try { var ctx = new (window.AudioContext || window.webkitAudioContext)(); var o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 1500; o.connect(ctx.destination); o.start(); setTimeout(() => o.stop(), 100); } catch(e) {} }
+    </script>
+  </body>
+</html>
