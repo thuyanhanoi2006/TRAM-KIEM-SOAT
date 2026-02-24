@@ -121,7 +121,7 @@
       function startStream(stream) {
          document.getElementById('start-screen').style.display = 'none'; 
          document.getElementById('ui').style.display = 'block';
-         document.getElementById('manualInput').focus();
+         // document.getElementById('manualInput').focus();
          try { speak("Sẵn sàng quét mã."); } catch(e) {}
          
          currentStream = stream;
@@ -214,7 +214,7 @@
  
       function resumeScanning() {
          document.getElementById('processing-badge').style.display = 'none';
-         document.getElementById('manualInput').focus(); 
+         // document.getElementById('manualInput').focus(); 
          
          scanState = "IDLE"; 
          
@@ -236,3 +236,4 @@
     </script>
   </body>
 </html>
+
