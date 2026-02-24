@@ -24,7 +24,7 @@
         border: 2px solid rgba(255, 255, 255, 0.4); border-radius: 15px; 
         box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6); pointer-events: none; 
       }
-
+ 
       #status-popup { position: fixed; top: 15%; left: 50%; transform: translate(-50%, 0); width: 90%; max-width: 400px; padding: 20px; border-radius: 15px; color: white; z-index: 1000; display: none; box-shadow: 0 10px 50px rgba(0,0,0,0.9); border: 2px solid #555; }
       .icon-large { font-size: 60px; display: block; margin-bottom: 10px; }
       #popup-msg { font-size: 22px; font-weight: bold; line-height: 1.3; text-transform: uppercase; }
@@ -34,7 +34,6 @@
       #manualInput { flex: 1; padding: 15px; font-size: 18px; border-radius: 5px; border: none; font-weight: bold; text-align: center; text-transform: uppercase; }
       .btn-send { padding: 0 20px; font-size: 18px; background: #008000; color: white; border: none; border-radius: 5px; font-weight: bold; }
       
-      /* Cảnh báo trạng thái đang xử lý */
       .status-badge { display:none; background: #ffc107; color: #000; font-weight: bold; font-size: 12px; padding: 5px 10px; border-radius: 20px; margin-bottom: 10px; animation: blinker 1s linear infinite; }
       @keyframes blinker { 50% { opacity: 0.5; } }
     </style>
@@ -45,30 +44,32 @@
       <p style="color:#aaa; font-size:14px; margin-bottom: 30px;">(Cơ chế chuẩn App Native - V8)</p>
       <button id="btn-start" onclick="startSystem()">🎥 BẬT MÁY ẢNH</button>
     </div>
-
+ 
     <div id="status-popup">
       <span id="popup-icon" class="icon-large"></span>
       <div id="popup-msg"></div>
       <div id="debug-voice"></div>
     </div>
-
+ 
     <div class="main-ui" id="ui">
       <h3 style="color:#00FF00; margin-top:0;">📡 HỆ THỐNG ĐANG QUÉT</h3>
-      <div id="processing-badge" class="status-badge">⏳ ĐANG XỬ LÝ... KHÓA CAMERA</div>
+      <div id="processing-badge" class="status-badge">⏳ĐANG XỬ LÝ... KHÓA CAMERA</div>
       <div class="control-panel">
-        <label>NGÀY QUÉT MÃ:</label>
+       <label>NGÀY QUÉT MÃ:</label>
         <input type="date" id="scanDate">
-
-        <label>CHỌN NHIỆM VỤ THỰC THI:</label>
+ 
+       <label>CHỌN NHIỆM VỤ THỰC THI:</label>
         <select id="eventSelect">
           <option value="DIEM_DANH_NGAY" selected>📅 1. ĐIỂM DANH NGÀY</option>
           <option value="VE_TRANH_THU">🏃 2. VỀ NGHỈ TRANH THỦ</option>
           <option value="LEN_DON_VI">🎒 3. LÊN ĐƠN VỊ</option>
           <option value="VE_TU_TUC_T7">🏡 4. VỀ TỰ TÚC (Trước ngày trả quân)</option>
           <option value="VE_TU_TUC_CN">🏡 5. VỀ TỰ TÚC (Cùng ngày trả quân)</option>
-        </select>
+          <option value="NGHI_LE_RA">🏖️ 6. NGHỈ LỄ (Quét RA)</option>
+          <option value="NGHI_LE_VAO">🏫 7. NGHỈ LỄ (Quét VÀO)</option>
+       </select>
       </div>
-
+ 
       <div id="scanner-container">
         <video id="video" autoplay muted playsinline></video>
         <div id="scan-region"></div>
@@ -87,7 +88,7 @@
       // LINK WEB APP GOOGLE SCRIPT CỦA BẠN (GIỮ NGUYÊN)
       // =========================================================================
       const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbwnDumAjyXNfoN2gWDQjRta97h4qrSllm3MnUwCEfg43RBRndAvE0KalRUZbnKS6LlShg/exec";
-
+ 
       var video = document.getElementById("video");
       var scanRequestId = null;
       var currentStream = null;
@@ -103,143 +104,131 @@
       
       var tzOffset = (new Date()).getTimezoneOffset() * 60000;
       var todayLocal = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
-      document.getElementById('scanDate').value = todayLocal;
-
+     document.getElementById('scanDate').value = todayLocal;
+ 
       function startSystem() {
         try { var ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch(e) {}
         
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-          .then(function(stream) { startStream(stream); })
-          .catch(function(err) {
-              navigator.mediaDevices.getUserMedia({ video: true })
-                .then(function(stream) { startStream(stream); })
-                .catch(function(err2) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
+       navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+         .then(function(stream) { startStream(stream); })
+         .catch(function(err) {
+             navigator.mediaDevices.getUserMedia({ video: true })
+               .then(function(stream) { startStream(stream); })
+               .catch(function(err2) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
           });
       }
-
+ 
       function startStream(stream) {
-          document.getElementById('start-screen').style.display = 'none'; 
-          document.getElementById('ui').style.display = 'block';
-          document.getElementById('manualInput').focus();
-          try { speak("Sẵn sàng quét mã."); } catch(e) {}
-          
-          currentStream = stream;
-          video.srcObject = stream;
-          video.setAttribute("playsinline", true); 
-          video.play().then(() => {
-              scanRequestId = requestAnimationFrame(tick);
+         document.getElementById('start-screen').style.display = 'none'; 
+         document.getElementById('ui').style.display = 'block';
+         document.getElementById('manualInput').focus();
+         try { speak("Sẵn sàng quét mã."); } catch(e) {}
+         
+         currentStream = stream;
+         video.srcObject = stream;
+         video.setAttribute("playsinline", true); 
+         video.play().then(() => {
+             scanRequestId = requestAnimationFrame(tick);
           });
       }
-
+ 
       function tick() {
-        // CHỐT CHẶN CỐT LÕI: Tắt động cơ giải mã ảnh NGAY LẬP TỨC nếu không ở trạng thái Rảnh
         if (scanState !== "IDLE") return; 
-
+ 
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
             var scanWidth = 400; 
             var ratio = video.videoWidth / scanWidth;
             var scanHeight = Math.floor(video.videoHeight / ratio);
             
-            hiddenCanvas.width = scanWidth;
-            hiddenCanvas.height = scanHeight;
+           hiddenCanvas.width = scanWidth;
+           hiddenCanvas.height = scanHeight;
             
-            hiddenCtx.drawImage(video, 0, 0, scanWidth, scanHeight);
+           hiddenCtx.drawImage(video, 0, 0, scanWidth, scanHeight);
             var imageData = hiddenCtx.getImageData(0, 0, scanWidth, scanHeight);
             
             var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
             
             if (code && code.data !== "") {
-                // Nếu camera nhìn thấy cái mã Y HỆT mã vừa quét xong -> Ngó lơ luôn
                 if (code.data === lastScannedCode) {
-                    scanRequestId = requestAnimationFrame(tick);
-                    return; 
+                   scanRequestId = requestAnimationFrame(tick);
+                   return; 
                 }
                 
-                // MÃ MỚI TINH! BÓP CÒ NGAY LẬP TỨC
-                triggerScanProcessing(code.data);
-                return; // NGẮT VÒNG LẶP TICK TUYỆT ĐỐI TẠI ĐÂY
+               triggerScanProcessing(code.data);
+               return; 
             }
         }
-        // Gọi lại loop để soi tiếp nếu chưa thấy QR
         scanRequestId = requestAnimationFrame(tick);
       }
-
+ 
       function handleManual() { 
-        if (scanState !== "IDLE") return; // Chặn máy quét súng bắn liên thanh
+        if (scanState !== "IDLE") return; 
         var val = document.getElementById('manualInput').value.trim(); 
         if(val) { 
-            document.getElementById('manualInput').value = '';
-            document.getElementById('manualInput').blur(); // Tắt bàn phím ảo
-            triggerScanProcessing(val); 
+           document.getElementById('manualInput').value = '';
+           document.getElementById('manualInput').blur(); 
+           triggerScanProcessing(val); 
         }
       }
       
       function triggerScanProcessing(codeString) {
-        // CHUYỂN TRẠNG THÁI: KHÓA BỘ GIẢI MÃ LẠI
         scanState = "PROCESSING"; 
-        lastScannedCode = codeString;
+       lastScannedCode = codeString;
         
-        document.getElementById('processing-badge').style.display = 'inline-block';
+       document.getElementById('processing-badge').style.display = 'inline-block';
         
-        // Nháy viền xanh báo hiệu đã "chộp" được ảnh (như Zalo)
         var container = document.getElementById('scanner-container');
-        container.style.borderColor = "#00FF00";
+       container.style.borderColor = "#00FF00";
         setTimeout(() => container.style.borderColor = "#555", 500);
         
         beep();
-        handleProcess(codeString);
+       handleProcess(codeString);
       }
       
       function handleProcess(code) {
-        showPopup('loading', 'Đang ghi dữ liệu...');
+       showPopup('loading', 'Đang ghi dữ liệu...');
         var evt = document.getElementById('eventSelect').value;
         var dateStr = document.getElementById('scanDate').value;
         
         if (!dateStr) { alert("Vui lòng chọn ngày!"); resumeScanning(); return; }
         
-        // Thêm tham số "&t=" để ĐẬP TAN BỘ NHỚ CACHE CỦA ĐIỆN THOẠI
         var apiUrl = GOOGLE_API_URL + "?api=scan&msv=" + encodeURIComponent(code) + "&eventCode=" + encodeURIComponent(evt) + "&dateStr=" + encodeURIComponent(dateStr) + "&t=" + new Date().getTime();
         
         fetch(apiUrl)
-            .then(response => response.json())
+           .then(response => response.json())
             .then(res => {
-                if(res.success) { showPopup('success', res.message); } else { showPopup('error', res.message); }
-                if(res.debugText) document.getElementById('debug-voice').innerText = "🔊 " + res.debugText;
-                if(res.audio) speak(res.audio);
-                
-                // Đợi 2.5 giây cho bảng thông báo và giọng đọc chạy xong
-                setTimeout(() => { 
-                    hidePopup(); 
-                    resumeScanning(); 
+               if(res.success) { showPopup('success', res.message); } else { showPopup('error', res.message); }
+               if(res.debugText) document.getElementById('debug-voice').innerText = "🔊 " + res.debugText;
+               if(res.audio) speak(res.audio);
+               
+               setTimeout(() => { 
+                   hidePopup(); 
+                   resumeScanning(); 
                 }, 2500);
             })
             .catch(err => {
-                showPopup('error', 'LỖI MẠNG HOẶC MÁY CHỦ BẬN'); 
-                setTimeout(() => { hidePopup(); resumeScanning(); }, 3000); 
+               showPopup('error', 'LỖI MẠNG HOẶC MÁY CHỦ BẬN'); 
+               setTimeout(() => { hidePopup(); resumeScanning(); }, 3000); 
             });
       }
-
+ 
       function resumeScanning() {
-          document.getElementById('processing-badge').style.display = 'none';
-          document.getElementById('manualInput').focus(); 
-          
-          // MỞ LẠI TRẠNG THÁI RẢNH
-          scanState = "IDLE"; 
-          
-          // Sau 5 giây kể từ khi mở khóa, hệ thống sẽ "quên" mã cũ đi.
-          // Cho phép bạn quét LẠI CÙNG 1 NGƯỜI ĐÓ nếu cần.
-          setTimeout(() => { lastScannedCode = ""; }, 5000);
-
-          // Tái khởi động lại bộ giải mã Camera
-          scanRequestId = requestAnimationFrame(tick); 
+         document.getElementById('processing-badge').style.display = 'none';
+         document.getElementById('manualInput').focus(); 
+         
+         scanState = "IDLE"; 
+         
+         setTimeout(() => { lastScannedCode = ""; }, 5000);
+ 
+         scanRequestId = requestAnimationFrame(tick); 
       }
-
+ 
       function showPopup(type, msg) {
         var p = document.getElementById('status-popup'); var icon = document.getElementById('popup-icon'); var txt = document.getElementById('popup-msg');
-        p.style.display = 'block'; txt.innerHTML = msg; document.getElementById('debug-voice').innerText = "";
-        if(type=='loading') { icon.innerHTML = '⏳'; p.style.background = 'rgba(0,0,0,0.85)'; }
-        if(type=='success') { icon.innerHTML = '✅'; p.style.background = '#006400'; }
-        if(type=='error')   { icon.innerHTML = '⛔'; p.style.background = '#8B0000'; }
+       p.style.display = 'block'; txt.innerHTML = msg; document.getElementById('debug-voice').innerText = "";
+       if(type=='loading') { icon.innerHTML = '⏳'; p.style.background = 'rgba(0,0,0,0.85)'; }
+       if(type=='success') { icon.innerHTML = '✅'; p.style.background = '#006400'; }
+       if(type=='error')   { icon.innerHTML = '⛔'; p.style.background = '#8B0000'; }
       }
       function hidePopup() { document.getElementById('status-popup').style.display = 'none'; }
       function speak(text) { window.speechSynthesis.cancel(); var msg = new SpeechSynthesisUtterance(text); msg.lang = 'vi-VN'; msg.rate = 1.1; window.speechSynthesis.speak(msg); }
