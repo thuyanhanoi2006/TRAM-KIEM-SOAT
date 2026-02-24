@@ -39,7 +39,7 @@
   <body>
     <div id="start-screen">
       <h1 style="color:#00FF00; font-size:30px; margin-bottom:10px;">TRẠM KIỂM SOÁT</h1>
-      <p style="color:#aaa; font-size:14px; margin-bottom: 30px;">(Tốc độ siêu tốc - Chống lặp mã)</p>
+      <p style="color:#aaa; font-size:14px; margin-bottom: 30px;">(Tốc độ siêu tốc - Khóa Spam Tuyệt Đối)</p>
       <button id="btn-start" onclick="startSystem()">🎥 BẬT MÁY ẢNH</button>
     </div>
 
@@ -80,18 +80,21 @@
     
     <script>
       // =========================================================================
-      // DÁN ĐƯỜNG LINK WEB APP GOOGLE SCRIPT CỦA BẠN VÀO ĐÂY (Link đuôi /exec)
+      // LINK WEB APP GOOGLE SCRIPT CỦA BẠN 
       // =========================================================================
       const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbwnDumAjyXNfoN2gWDQjRta97h4qrSllm3MnUwCEfg43RBRndAvE0KalRUZbnKS6LlShg/exec";
 
       var video = document.getElementById("video");
-      var isScanning = false;
       var scanRequestId = null;
       var currentStream = null;
       
-      // BỘ NHỚ CHỐNG QUÉT TRÙNG (Lưu mã vừa quét)
+      // =========================================================================
+      // CỜ BẢO VỆ CHỐNG SPAM TOÀN CỤC (CỰC KỲ QUAN TRỌNG)
+      // =========================================================================
+      var isProcessing = false; // Thay thế isScanning, khóa mọi tương tác khi đang xử lý
       var lastScannedCode = "";
       var lastScanTime = 0;
+      const COOLDOWN_TIME = 6000; // Khóa lặp lại cùng 1 mã trong 6 giây
       
       var hiddenCanvas = document.getElementById("hidden-canvas");
       var hiddenCtx = hiddenCanvas.getContext("2d", { willReadFrequently: true });
@@ -126,7 +129,8 @@
       }
 
       function tick() {
-        if (isScanning) return; 
+        // CHỐT CHẶN 1: Nếu đang gửi dữ liệu, chặn đứng Camera không cho phân tích hình ảnh nữa
+        if (isProcessing) return; 
 
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
             var scanWidth = 400; 
@@ -142,39 +146,51 @@
             var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
             
             if (code && code.data !== "") {
-                // CƠ CHẾ CHỐNG LẶP MÃ (Bỏ qua nếu quét lại cùng 1 mã trong vòng 5 giây)
                 var now = new Date().getTime();
-                if (code.data === lastScannedCode && (now - lastScanTime < 5000)) {
+                // Nếu quyét đúng cái mã vừa nãy trong vòng 6s -> Bỏ qua, tiếp tục soi tiếp
+                if (code.data === lastScannedCode && (now - lastScanTime < COOLDOWN_TIME)) {
                     scanRequestId = requestAnimationFrame(tick);
                     return; 
                 }
                 
-                // Mã hợp lệ -> Tiến hành khóa máy
-                lastScannedCode = code.data;
-                lastScanTime = now;
-                isScanning = true;
-                
-                video.pause(); // Đóng băng Camera
-                var container = document.getElementById('scanner-container');
-                container.style.borderColor = "#FFF";
-                setTimeout(() => container.style.borderColor = "#555", 300);
-
-                beep();
-                handleProcess(code.data);
+                // Mã Hợp Lệ Mới -> Kích hoạt xử lý
+                triggerScanProcessing(code.data);
                 return;
             }
         }
-        if (!isScanning) scanRequestId = requestAnimationFrame(tick);
+        scanRequestId = requestAnimationFrame(tick);
       }
 
       function handleManual() { 
-        var val = document.getElementById('manualInput').value; 
+        // CHỐT CHẶN 2: Chặn cứng máy quét mã vạch spam phím Enter
+        if (isProcessing) return; 
+
+        var val = document.getElementById('manualInput').value.trim(); 
         if(val) { 
-            beep(); 
-            isScanning = true; 
-            video.pause(); 
-            handleProcess(val); 
+            var now = new Date().getTime();
+            // Nếu bấm tay/quét máy đúng mã cũ trong vòng 6s -> Xóa trắng ô nhập, im lặng
+            if (val === lastScannedCode && (now - lastScanTime < COOLDOWN_TIME)) {
+                document.getElementById('manualInput').value = '';
+                return;
+            }
+            // Kích hoạt xử lý
+            triggerScanProcessing(val); 
         }
+      }
+      
+      // HÀM GOM CHUNG XỬ LÝ (KHÓA MÁY CHUẨN XÁC)
+      function triggerScanProcessing(codeString) {
+        isProcessing = true; // KHÓA TOÀN CỤC - KHÔNG NHẬN BẤT CỨ LỆNH NÀO NỮA
+        lastScannedCode = codeString;
+        lastScanTime = new Date().getTime();
+        
+        video.pause(); // Đóng băng hình ảnh
+        var container = document.getElementById('scanner-container');
+        container.style.borderColor = "#FFF";
+        setTimeout(() => container.style.borderColor = "#555", 300);
+        
+        beep();
+        handleProcess(codeString);
       }
       
       function handleProcess(code) {
@@ -195,18 +211,19 @@
                 
                 setTimeout(() => { 
                     hidePopup(); 
-                    document.getElementById('manualInput').value = ''; 
                     resumeScanning(); 
                 }, 2500);
             })
             .catch(err => {
-                showPopup('error', 'LỖI MẠNG HOẶC SAI LINK API'); 
+                showPopup('error', 'LỖI MẠNG HOẶC MÁY CHỦ BẬN'); 
                 setTimeout(() => { hidePopup(); resumeScanning(); }, 3000); 
             });
       }
 
       function resumeScanning() {
-          isScanning = false;
+          document.getElementById('manualInput').value = ''; // Xóa sạch ô nhập tay
+          isProcessing = false; // MỞ KHÓA CHO LẦN QUÉT TIẾP THEO
+          
           if (currentStream) {
               var container = document.getElementById('scanner-container');
               container.style.borderColor = "#555"; 
@@ -228,4 +245,3 @@
     </script>
   </body>
 </html>
-
