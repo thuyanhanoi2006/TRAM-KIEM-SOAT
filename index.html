@@ -16,7 +16,7 @@
       label { display: block; text-align: left; color: #ccc; font-weight: bold; margin-bottom: 5px; font-size: 14px;}
       select, input[type="date"] { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; background: #333; color: white; border: 1px solid #555; border-radius: 5px; outline: none; margin-bottom: 10px; box-sizing: border-box;}
       
-      #scanner-container { position: relative; width: 100%; max-width: 500px; height: 350px; margin: 0 auto 15px auto; border: 3px solid #555; border-radius: 10px; overflow: hidden; background: #111; transition: border-color 0.2s;}
+     #scanner-container { position: relative; width: 100%; max-width: 500px; height: 350px; margin: 0 auto 15px auto; border: 3px solid #555; border-radius: 10px; overflow: hidden; background: #111; transition: border-color 0.2s;}
       #video { width: 100%; height: 100%; object-fit: cover; display: block; }
       
       #scan-region { 
@@ -60,7 +60,8 @@
  
        <label>CHỌN NHIỆM VỤ THỰC THI:</label>
         <select id="eventSelect">
-          <option value="DIEM_DANH_NGAY" selected>📅 1. ĐIỂM DANH NGÀY</option>
+          <option value="" disabled selected>⚠️ HÃY CHỌN NHIỆM VỤ THỰC THI</option>
+          <option value="DIEM_DANH_NGAY">📅 1. ĐIỂM DANH NGÀY</option>
           <option value="VE_TRANH_THU">🏃 2. VỀ NGHỈ TRANH THỦ</option>
           <option value="LEN_DON_VI">🎒 3. LÊN ĐƠN VỊ</option>
           <option value="VE_TU_TUC_T7">🏡 4. VỀ TỰ TÚC (Trước ngày trả quân)</option>
@@ -96,39 +97,38 @@
       // =========================================================================
       // CƠ CHẾ STATE MACHINE (MÁY TRẠNG THÁI) - CHUẨN ZALO
       // =========================================================================
-      var scanState = "IDLE"; // Trạng thái: IDLE (Đang rảnh), PROCESSING (Đang xử lý)
-      var lastScannedCode = ""; // Ghi nhớ mã vừa quét
+      var scanState = "IDLE"; 
+      var lastScannedCode = ""; 
       
       var hiddenCanvas = document.getElementById("hidden-canvas");
       var hiddenCtx = hiddenCanvas.getContext("2d", { willReadFrequently: true });
       
       var tzOffset = (new Date()).getTimezoneOffset() * 60000;
       var todayLocal = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
-     document.getElementById('scanDate').value = todayLocal;
+      document.getElementById('scanDate').value = todayLocal;
  
       function startSystem() {
         try { var ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch(e) {}
         
-       navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-         .then(function(stream) { startStream(stream); })
-         .catch(function(err) {
-             navigator.mediaDevices.getUserMedia({ video: true })
-               .then(function(stream) { startStream(stream); })
-               .catch(function(err2) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(function(stream) { startStream(stream); })
+        .catch(function(err) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+              .then(function(stream) { startStream(stream); })
+              .catch(function(err2) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
           });
       }
  
       function startStream(stream) {
-         document.getElementById('start-screen').style.display = 'none'; 
-         document.getElementById('ui').style.display = 'block';
-         // document.getElementById('manualInput').focus();
-         try { speak("Sẵn sàng quét mã."); } catch(e) {}
-         
-         currentStream = stream;
-         video.srcObject = stream;
-         video.setAttribute("playsinline", true); 
-         video.play().then(() => {
-             scanRequestId = requestAnimationFrame(tick);
+        document.getElementById('start-screen').style.display = 'none'; 
+        document.getElementById('ui').style.display = 'block';
+        try { speak("Sẵn sàng quét mã."); } catch(e) {}
+        
+        currentStream = stream;
+        video.srcObject = stream;
+        video.setAttribute("playsinline", true); 
+        video.play().then(() => {
+            scanRequestId = requestAnimationFrame(tick);
           });
       }
  
@@ -140,22 +140,22 @@
             var ratio = video.videoWidth / scanWidth;
             var scanHeight = Math.floor(video.videoHeight / ratio);
             
-           hiddenCanvas.width = scanWidth;
-           hiddenCanvas.height = scanHeight;
+            hiddenCanvas.width = scanWidth;
+            hiddenCanvas.height = scanHeight;
             
-           hiddenCtx.drawImage(video, 0, 0, scanWidth, scanHeight);
+            hiddenCtx.drawImage(video, 0, 0, scanWidth, scanHeight);
             var imageData = hiddenCtx.getImageData(0, 0, scanWidth, scanHeight);
             
             var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
             
             if (code && code.data !== "") {
                 if (code.data === lastScannedCode) {
-                   scanRequestId = requestAnimationFrame(tick);
-                   return; 
+                  scanRequestId = requestAnimationFrame(tick);
+                  return; 
                 }
                 
-               triggerScanProcessing(code.data);
-               return; 
+              triggerScanProcessing(code.data);
+              return;
             }
         }
         scanRequestId = requestAnimationFrame(tick);
@@ -165,70 +165,80 @@
         if (scanState !== "IDLE") return; 
         var val = document.getElementById('manualInput').value.trim(); 
         if(val) { 
-           document.getElementById('manualInput').value = '';
-           document.getElementById('manualInput').blur(); 
-           triggerScanProcessing(val); 
+          document.getElementById('manualInput').value = '';
+          document.getElementById('manualInput').blur(); 
+          triggerScanProcessing(val); 
         }
       }
       
       function triggerScanProcessing(codeString) {
         scanState = "PROCESSING"; 
-       lastScannedCode = codeString;
+        lastScannedCode = codeString;
         
-       document.getElementById('processing-badge').style.display = 'inline-block';
+        document.getElementById('processing-badge').style.display = 'inline-block';
         
         var container = document.getElementById('scanner-container');
-       container.style.borderColor = "#00FF00";
+        container.style.borderColor = "#00FF00";
         setTimeout(() => container.style.borderColor = "#555", 500);
         
         beep();
-       handleProcess(codeString);
+        handleProcess(codeString);
       }
       
       function handleProcess(code) {
-       showPopup('loading', 'Đang ghi dữ liệu...');
         var evt = document.getElementById('eventSelect').value;
         var dateStr = document.getElementById('scanDate').value;
         
-        if (!dateStr) { alert("Vui lòng chọn ngày!"); resumeScanning(); return; }
+        // KIỂM TRA ĐÃ CHỌN NHIỆM VỤ CHƯA
+        if (!evt || evt === "") { 
+            alert("⚠️ BẠN CHƯA CHỌN NHIỆM VỤ THỰC THI!\nVui lòng chọn nhiệm vụ trước khi quét mã."); 
+            resumeScanning(); 
+            return; 
+        }
+
+        if (!dateStr) { 
+            alert("Vui lòng chọn ngày!"); 
+            resumeScanning(); 
+            return; 
+        }
         
-        var apiUrl = GOOGLE_API_URL + "?api=scan&msv=" + encodeURIComponent(code) + "&eventCode=" + encodeURIComponent(evt) + "&dateStr=" + encodeURIComponent(dateStr) + "&t=" + new Date().getTime();
+        showPopup('loading', 'Đang ghi dữ liệu...');
+        
+        var apiUrl = GOOGLE_API_URL + "?api=scan&msv=" + encodeURIComponent(code) +
+        "&eventCode=" + encodeURIComponent(evt) +
+        "&dateStr=" + encodeURIComponent(dateStr) + "&t=" + new Date().getTime();
         
         fetch(apiUrl)
-           .then(response => response.json())
-            .then(res => {
-               if(res.success) { showPopup('success', res.message); } else { showPopup('error', res.message); }
-               if(res.debugText) document.getElementById('debug-voice').innerText = "🔊 " + res.debugText;
-               if(res.audio) speak(res.audio);
+          .then(response => response.json())
+          .then(res => {
+              if(res.success) { showPopup('success', res.message); } else { showPopup('error', res.message); }
+              if(res.debugText) document.getElementById('debug-voice').innerText = "🔊 " + res.debugText;
+              if(res.audio) speak(res.audio);
                
-               setTimeout(() => { 
-                   hidePopup(); 
-                   resumeScanning(); 
+              setTimeout(() => { 
+                  hidePopup(); 
+                  resumeScanning(); 
                 }, 2500);
             })
             .catch(err => {
-               showPopup('error', 'LỖI MẠNG HOẶC MÁY CHỦ BẬN'); 
-               setTimeout(() => { hidePopup(); resumeScanning(); }, 3000); 
+              showPopup('error', 'LỖI MẠNG HOẶC MÁY CHỦ BẬN'); 
+              setTimeout(() => { hidePopup(); resumeScanning(); }, 3000); 
             });
       }
  
       function resumeScanning() {
-         document.getElementById('processing-badge').style.display = 'none';
-         // document.getElementById('manualInput').focus(); 
-         
-         scanState = "IDLE"; 
-         
-         setTimeout(() => { lastScannedCode = ""; }, 5000);
- 
-         scanRequestId = requestAnimationFrame(tick); 
+        document.getElementById('processing-badge').style.display = 'none';
+        scanState = "IDLE"; 
+        setTimeout(() => { lastScannedCode = ""; }, 5000);
+        scanRequestId = requestAnimationFrame(tick); 
       }
  
       function showPopup(type, msg) {
         var p = document.getElementById('status-popup'); var icon = document.getElementById('popup-icon'); var txt = document.getElementById('popup-msg');
-       p.style.display = 'block'; txt.innerHTML = msg; document.getElementById('debug-voice').innerText = "";
-       if(type=='loading') { icon.innerHTML = '⏳'; p.style.background = 'rgba(0,0,0,0.85)'; }
-       if(type=='success') { icon.innerHTML = '✅'; p.style.background = '#006400'; }
-       if(type=='error')   { icon.innerHTML = '⛔'; p.style.background = '#8B0000'; }
+        p.style.display = 'block'; txt.innerHTML = msg; document.getElementById('debug-voice').innerText = "";
+        if(type=='loading') { icon.innerHTML = '⏳'; p.style.background = 'rgba(0,0,0,0.85)'; }
+        if(type=='success') { icon.innerHTML = '✅'; p.style.background = '#006400'; }
+        if(type=='error')   { icon.innerHTML = '⛔'; p.style.background = '#8B0000'; }
       }
       function hidePopup() { document.getElementById('status-popup').style.display = 'none'; }
       function speak(text) { window.speechSynthesis.cancel(); var msg = new SpeechSynthesisUtterance(text); msg.lang = 'vi-VN'; msg.rate = 1.1; window.speechSynthesis.speak(msg); }
@@ -236,4 +246,3 @@
     </script>
   </body>
 </html>
-
