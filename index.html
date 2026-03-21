@@ -110,12 +110,27 @@
       function startSystem() {
         try { var ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch(e) {}
         
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        // Cải tiến: Yêu cầu camera có độ phân giải cao hơn để quét mã phức tạp
+        const constraints = {
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+
+        navigator.mediaDevices.getUserMedia(constraints)
         .then(function(stream) { startStream(stream); })
         .catch(function(err) {
-            navigator.mediaDevices.getUserMedia({ video: true })
+            // Nếu không được, thử lại với yêu cầu đơn giản hơn
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
               .then(function(stream) { startStream(stream); })
-              .catch(function(err2) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
+              .catch(function(err2) {
+                  // Nếu vẫn không được, thử với bất kỳ camera nào
+                  navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(function(stream) { startStream(stream); })
+                    .catch(function(err3) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
+              });
           });
       }
  
@@ -136,17 +151,15 @@
         if (scanState !== "IDLE") return; 
  
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            var scanWidth = 600; // Tăng độ phân giải quét để nhận diện mã phức tạp (chữ + số) tốt hơn
-            var ratio = video.videoWidth / scanWidth;
-            var scanHeight = Math.floor(video.videoHeight / ratio);
+            // Cải tiến: Dùng thẳng độ phân giải gốc của video để có chất lượng ảnh tốt nhất
+            hiddenCanvas.width = video.videoWidth;
+            hiddenCanvas.height = video.videoHeight;
+            hiddenCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+            var imageData = hiddenCtx.getImageData(0, 0, video.videoWidth, video.videoHeight);
             
-            hiddenCanvas.width = scanWidth;
-            hiddenCanvas.height = scanHeight;
-            
-            hiddenCtx.drawImage(video, 0, 0, scanWidth, scanHeight);
-            var imageData = hiddenCtx.getImageData(0, 0, scanWidth, scanHeight);
-            
-            var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+            var code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert"
+            });
             
             if (code && code.data !== "") {
                 // Luôn chuyển mã quét được về chữ hoa để đồng bộ
@@ -165,6 +178,7 @@
  
       function handleManual() { 
         if (scanState !== "IDLE") return; 
+        // Giữ nguyên việc chuyển chữ hoa để đồng bộ với mã QR
         var val = document.getElementById('manualInput').value.trim().toUpperCase(); 
         if(val) { 
           document.getElementById('manualInput').value = '';
