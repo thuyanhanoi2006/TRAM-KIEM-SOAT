@@ -110,7 +110,6 @@
       function startSystem() {
         try { var ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch(e) {}
         
-        // Cải tiến: Yêu cầu camera có độ phân giải cao hơn để quét mã phức tạp
         const constraints = {
           video: {
             facingMode: "environment",
@@ -122,11 +121,9 @@
         navigator.mediaDevices.getUserMedia(constraints)
         .then(function(stream) { startStream(stream); })
         .catch(function(err) {
-            // Nếu không được, thử lại với yêu cầu đơn giản hơn
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
               .then(function(stream) { startStream(stream); })
               .catch(function(err2) {
-                  // Nếu vẫn không được, thử với bất kỳ camera nào
                   navigator.mediaDevices.getUserMedia({ video: true })
                     .then(function(stream) { startStream(stream); })
                     .catch(function(err3) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
@@ -151,12 +148,8 @@
         if (scanState !== "IDLE") return;
       
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-          // Cải tiến: Chỉ quét vùng trung tâm để tăng tốc và độ chính xác
           const videoWidth = video.videoWidth;
           const videoHeight = video.videoHeight;
-      
-          // Kích thước vùng quét (tương ứng với CSS của #scan-region)
-          // top: 7%, left: 7%, width: 86%, height: 86%
           const scanX = videoWidth * 0.07;
           const scanY = videoHeight * 0.07;
           const scanWidth = videoWidth * 0.86;
@@ -164,8 +157,6 @@
       
           hiddenCanvas.width = scanWidth;
           hiddenCanvas.height = scanHeight;
-      
-          // Chép vùng quét từ video vào canvas (đây là bước crop)
           hiddenCtx.drawImage(video, scanX, scanY, scanWidth, scanHeight, 0, 0, scanWidth, scanHeight);
           
           var imageData = hiddenCtx.getImageData(0, 0, scanWidth, scanHeight);
@@ -174,8 +165,10 @@
           });
       
           if (code && code.data !== "") {
-            // Luôn chuyển mã quét được về chữ hoa để đồng bộ
-            var processedCode = String(code.data).trim().toUpperCase();
+            // Chuẩn hóa mã quét được: IN HOA và bỏ dấu
+            const processedCode = String(code.data).trim().toUpperCase()
+                                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
             if (processedCode === lastScannedCode) {
               scanRequestId = requestAnimationFrame(tick);
               return;
@@ -190,12 +183,15 @@
  
       function handleManual() { 
         if (scanState !== "IDLE") return; 
-        // Giữ nguyên việc chuyển chữ hoa để đồng bộ với mã QR
-        var val = document.getElementById('manualInput').value.trim().toUpperCase(); 
-        if(val) { 
+        
+        let val = document.getElementById('manualInput').value.trim();
+        if(val) {
+          // Chuẩn hóa input: IN HOA và bỏ dấu để đồng bộ
+          const processedVal = val.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
           document.getElementById('manualInput').value = '';
           document.getElementById('manualInput').blur(); 
-          triggerScanProcessing(val); 
+          triggerScanProcessing(processedVal); 
         }
       }
       
@@ -217,7 +213,6 @@
         var evt = document.getElementById('eventSelect').value;
         var dateStr = document.getElementById('scanDate').value;
         
-        // KIỂM TRA ĐÃ CHỌN NHIỆM VỤ CHƯA
         if (!evt || evt === "") { 
             alert("⚠️ BẠN CHƯA CHỌN NHIỆM VỤ THỰC THI!\nVui lòng chọn nhiệm vụ trước khi quét mã."); 
             resumeScanning(); 
@@ -257,7 +252,7 @@
       function resumeScanning() {
         document.getElementById('processing-badge').style.display = 'none';
         scanState = "IDLE"; 
-        setTimeout(() => { lastScannedCode = ""; }, 5000);
+        setTimeout(() => { lastScannedCode = ""; }, 2000); // Tăng thời gian chờ để tránh quét lại mã cũ
         scanRequestId = requestAnimationFrame(tick); 
       }
  
