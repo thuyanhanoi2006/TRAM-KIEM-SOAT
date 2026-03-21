@@ -136,7 +136,7 @@
         if (scanState !== "IDLE") return; 
  
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            var scanWidth = 400; 
+            var scanWidth = 600; // Tăng độ phân giải quét để nhận diện mã phức tạp (chữ + số) tốt hơn
             var ratio = video.videoWidth / scanWidth;
             var scanHeight = Math.floor(video.videoHeight / ratio);
             
@@ -149,12 +149,14 @@
             var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
             
             if (code && code.data !== "") {
-                if (code.data === lastScannedCode) {
+                // Luôn chuyển mã quét được về chữ hoa để đồng bộ
+                var processedCode = String(code.data).trim().toUpperCase();
+                if (processedCode === lastScannedCode) {
                   scanRequestId = requestAnimationFrame(tick);
                   return; 
                 }
                 
-              triggerScanProcessing(code.data);
+              triggerScanProcessing(processedCode);
               return;
             }
         }
@@ -163,7 +165,7 @@
  
       function handleManual() { 
         if (scanState !== "IDLE") return; 
-        var val = document.getElementById('manualInput').value.trim(); 
+        var val = document.getElementById('manualInput').value.trim().toUpperCase(); 
         if(val) { 
           document.getElementById('manualInput').value = '';
           document.getElementById('manualInput').blur(); 
