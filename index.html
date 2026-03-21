@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>TRẠM KIỂM SOÁT Z-CORE</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <!-- THAY THẾ THƯ VIỆN jsQR BẰNG ZXing.js MẠNH MẼ HƠN -->
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/zxing.min.js"></script>
     <style>
       body { margin: 0; padding: 0; background: #000; font-family: 'Arial', sans-serif; text-align: center; color: white; }
       #start-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
@@ -94,15 +95,15 @@
       var scanRequestId = null;
       var currentStream = null;
       
-      // =========================================================================
-      // CƠ CHẾ STATE MACHINE (MÁY TRẠNG THÁI) - CHUẨN ZALO
-      // =========================================================================
       var scanState = "IDLE"; 
       var lastScannedCode = ""; 
       
       var hiddenCanvas = document.getElementById("hidden-canvas");
       var hiddenCtx = hiddenCanvas.getContext("2d", { willReadFrequently: true });
       
+      // KHỞI TẠO BỘ ĐỌC MÃ ZXing
+      const codeReader = new ZXing.BrowserQRCodeReader();
+
       var tzOffset = (new Date()).getTimezoneOffset() * 60000;
       var todayLocal = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
       document.getElementById('scanDate').value = todayLocal;
@@ -155,13 +156,12 @@
           const videoWidth = video.videoWidth;
           const videoHeight = video.videoHeight;
       
-          // Vùng crop từ video, tương ứng với khung ngắm CSS
           const cropX = videoWidth * 0.07;
           const cropY = videoHeight * 0.07;
           const cropWidth = videoWidth * 0.86;
           const cropHeight = videoHeight * 0.86;
       
-          // Resize vùng crop về một kích thước tối ưu cho jsQR xử lý
+          // Resize vùng crop về một kích thước tối ưu cho bộ giải mã xử lý
           const processSize = 800;
           hiddenCanvas.width = processSize;
           hiddenCanvas.height = processSize;
@@ -169,22 +169,26 @@
           // Crop và resize trong 1 bước
           hiddenCtx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, processSize, processSize);
           
-          const imageData = hiddenCtx.getImageData(0, 0, processSize, processSize);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "dontInvert"
-          });
-      
-          if (code && code.data !== "") {
-            // Chỉ viết hoa và làm sạch khoảng trắng, không thay đổi/bỏ dấu ký tự
-            const processedCode = String(code.data).trim().toUpperCase();
+          try {
+            // Sử dụng ZXing để giải mã từ canvas đã được tối ưu
+            const result = codeReader.decodeFromCanvas(hiddenCanvas);
+            if (result) {
+                const codeData = result.getText();
+                if (codeData) {
+                    // Chỉ viết hoa và làm sạch khoảng trắng, không thay đổi/bỏ dấu ký tự
+                    const processedCode = String(codeData).trim().toUpperCase();
 
-            if (processedCode === lastScannedCode) {
-              scanRequestId = requestAnimationFrame(tick);
-              return;
+                    if (processedCode === lastScannedCode) {
+                      scanRequestId = requestAnimationFrame(tick);
+                      return;
+                    }
+              
+                    triggerScanProcessing(processedCode);
+                    return; // Dừng vòng lặp quét
+                }
             }
-      
-            triggerScanProcessing(processedCode);
-            return;
+          } catch (err) {
+            // Bỏ qua lỗi 'NotFoundException' vì nó xảy ra liên tục khi không có mã QR
           }
         }
         scanRequestId = requestAnimationFrame(tick);
@@ -219,7 +223,6 @@
         var evt = document.getElementById('eventSelect').value;
         var dateStr = document.getElementById('scanDate').value;
         
-        // KIỂM TRA ĐÃ CHỌN NHIỆM VỤ CHƯA
         if (!evt || evt === "") { 
             alert("⚠️ BẠN CHƯA CHỌN NHIỆM VỤ THỰC THI!\nVui lòng chọn nhiệm vụ trước khi quét mã."); 
             resumeScanning(); 
