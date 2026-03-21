@@ -110,6 +110,7 @@
       function startSystem() {
         try { var ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch(e) {}
         
+        // Yêu cầu camera có độ phân giải cao để quét mã phức tạp
         const constraints = {
           video: {
             facingMode: "environment",
@@ -121,9 +122,11 @@
         navigator.mediaDevices.getUserMedia(constraints)
         .then(function(stream) { startStream(stream); })
         .catch(function(err) {
+            // Nếu không được, thử lại với yêu cầu đơn giản hơn
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
               .then(function(stream) { startStream(stream); })
               .catch(function(err2) {
+                  // Nếu vẫn không được, thử với bất kỳ camera nào
                   navigator.mediaDevices.getUserMedia({ video: true })
                     .then(function(stream) { startStream(stream); })
                     .catch(function(err3) { alert("Vui lòng cho phép trình duyệt truy cập Máy ảnh!"); });
@@ -148,26 +151,32 @@
         if (scanState !== "IDLE") return;
       
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          // Cải tiến: Chỉ quét vùng trung tâm và resize để tăng tốc và độ chính xác
           const videoWidth = video.videoWidth;
           const videoHeight = video.videoHeight;
-          const scanX = videoWidth * 0.07;
-          const scanY = videoHeight * 0.07;
-          const scanWidth = videoWidth * 0.86;
-          const scanHeight = videoHeight * 0.86;
       
-          hiddenCanvas.width = scanWidth;
-          hiddenCanvas.height = scanHeight;
-          hiddenCtx.drawImage(video, scanX, scanY, scanWidth, scanHeight, 0, 0, scanWidth, scanHeight);
+          // Vùng crop từ video, tương ứng với khung ngắm CSS
+          const cropX = videoWidth * 0.07;
+          const cropY = videoHeight * 0.07;
+          const cropWidth = videoWidth * 0.86;
+          const cropHeight = videoHeight * 0.86;
+      
+          // Resize vùng crop về một kích thước tối ưu cho jsQR xử lý
+          const processSize = 800;
+          hiddenCanvas.width = processSize;
+          hiddenCanvas.height = processSize;
+      
+          // Crop và resize trong 1 bước
+          hiddenCtx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, processSize, processSize);
           
-          var imageData = hiddenCtx.getImageData(0, 0, scanWidth, scanHeight);
-          var code = jsQR(imageData.data, imageData.width, imageData.height, {
+          const imageData = hiddenCtx.getImageData(0, 0, processSize, processSize);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
             inversionAttempts: "dontInvert"
           });
       
           if (code && code.data !== "") {
-            // Chuẩn hóa mã quét được: IN HOA và bỏ dấu
-            const processedCode = String(code.data).trim().toUpperCase()
-                                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            // Chỉ viết hoa và làm sạch khoảng trắng, không thay đổi/bỏ dấu ký tự
+            const processedCode = String(code.data).trim().toUpperCase();
 
             if (processedCode === lastScannedCode) {
               scanRequestId = requestAnimationFrame(tick);
@@ -183,15 +192,12 @@
  
       function handleManual() { 
         if (scanState !== "IDLE") return; 
-        
-        let val = document.getElementById('manualInput').value.trim();
-        if(val) {
-          // Chuẩn hóa input: IN HOA và bỏ dấu để đồng bộ
-          const processedVal = val.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
+        // Chỉ viết hoa và làm sạch khoảng trắng, không thay đổi/bỏ dấu ký tự
+        var val = document.getElementById('manualInput').value.trim().toUpperCase(); 
+        if(val) { 
           document.getElementById('manualInput').value = '';
           document.getElementById('manualInput').blur(); 
-          triggerScanProcessing(processedVal); 
+          triggerScanProcessing(val); 
         }
       }
       
@@ -213,6 +219,7 @@
         var evt = document.getElementById('eventSelect').value;
         var dateStr = document.getElementById('scanDate').value;
         
+        // KIỂM TRA ĐÃ CHỌN NHIỆM VỤ CHƯA
         if (!evt || evt === "") { 
             alert("⚠️ BẠN CHƯA CHỌN NHIỆM VỤ THỰC THI!\nVui lòng chọn nhiệm vụ trước khi quét mã."); 
             resumeScanning(); 
@@ -252,7 +259,7 @@
       function resumeScanning() {
         document.getElementById('processing-badge').style.display = 'none';
         scanState = "IDLE"; 
-        setTimeout(() => { lastScannedCode = ""; }, 2000); // Tăng thời gian chờ để tránh quét lại mã cũ
+        setTimeout(() => { lastScannedCode = ""; }, 5000);
         scanRequestId = requestAnimationFrame(tick); 
       }
  
