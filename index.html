@@ -148,30 +148,42 @@
       }
  
       function tick() {
-        if (scanState !== "IDLE") return; 
- 
+        if (scanState !== "IDLE") return;
+      
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            // Cải tiến: Dùng thẳng độ phân giải gốc của video để có chất lượng ảnh tốt nhất
-            hiddenCanvas.width = video.videoWidth;
-            hiddenCanvas.height = video.videoHeight;
-            hiddenCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-            var imageData = hiddenCtx.getImageData(0, 0, video.videoWidth, video.videoHeight);
-            
-            var code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: "dontInvert"
-            });
-            
-            if (code && code.data !== "") {
-                // Luôn chuyển mã quét được về chữ hoa để đồng bộ
-                var processedCode = String(code.data).trim().toUpperCase();
-                if (processedCode === lastScannedCode) {
-                  scanRequestId = requestAnimationFrame(tick);
-                  return; 
-                }
-                
-              triggerScanProcessing(processedCode);
+          // Cải tiến: Chỉ quét vùng trung tâm để tăng tốc và độ chính xác
+          const videoWidth = video.videoWidth;
+          const videoHeight = video.videoHeight;
+      
+          // Kích thước vùng quét (tương ứng với CSS của #scan-region)
+          // top: 7%, left: 7%, width: 86%, height: 86%
+          const scanX = videoWidth * 0.07;
+          const scanY = videoHeight * 0.07;
+          const scanWidth = videoWidth * 0.86;
+          const scanHeight = videoHeight * 0.86;
+      
+          hiddenCanvas.width = scanWidth;
+          hiddenCanvas.height = scanHeight;
+      
+          // Chép vùng quét từ video vào canvas (đây là bước crop)
+          hiddenCtx.drawImage(video, scanX, scanY, scanWidth, scanHeight, 0, 0, scanWidth, scanHeight);
+          
+          var imageData = hiddenCtx.getImageData(0, 0, scanWidth, scanHeight);
+          var code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert"
+          });
+      
+          if (code && code.data !== "") {
+            // Luôn chuyển mã quét được về chữ hoa để đồng bộ
+            var processedCode = String(code.data).trim().toUpperCase();
+            if (processedCode === lastScannedCode) {
+              scanRequestId = requestAnimationFrame(tick);
               return;
             }
+      
+            triggerScanProcessing(processedCode);
+            return;
+          }
         }
         scanRequestId = requestAnimationFrame(tick);
       }
