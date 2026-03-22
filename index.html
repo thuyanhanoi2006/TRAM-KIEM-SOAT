@@ -174,8 +174,9 @@
           });
       
           if (code && code.data !== "") {
-            // SỬA: Dùng hàm chuẩn hóa tiếng Việt sang không dấu theo quy ước
-            var processedCode = convertVietnameseToCode(code.data);
+            // XỬ LÝ ĐA CHIỀU: Quét mã (CDD...) -> Dịch ngược lại thành mã gốc (CĐ...)
+            var rawCode = convertVietnameseToCode(code.data); // Đảm bảo đầu vào chuẩn form CDD
+            var processedCode = restoreVietnameseFromCode(rawCode); // Dịch lại về CĐ để khớp Database
 
             if (processedCode === lastScannedCode) {
               scanRequestId = requestAnimationFrame(tick);
@@ -191,8 +192,10 @@
  
       function handleManual() { 
         if (scanState !== "IDLE") return; 
-        // SỬA: Dùng hàm chuẩn hóa tiếng Việt khi nhập tay
-        var val = convertVietnameseToCode(document.getElementById('manualInput').value); 
+        // XỬ LÝ ĐA CHIỀU: Nhập tay (kể cả nhập CDD hay CĐ đều hiểu đúng là CĐ)
+        var rawVal = convertVietnameseToCode(document.getElementById('manualInput').value); 
+        var val = restoreVietnameseFromCode(rawVal);
+
         if(val) { 
           document.getElementById('manualInput').value = '';
           document.getElementById('manualInput').blur(); 
@@ -280,7 +283,7 @@
         if (!str) return "";
         str = String(str).trim().toUpperCase();
         
-        // Bước 1: Đưa về dạng tổ hợp (NFC) để xử lý các ký tự đặc biệt
+        // Bước 1: Đưa về dạng tổ hợp (NFC)
         str = str.normalize("NFC");
         
         // Bước 2: Thay thế các ký tự có dấu đặc trưng theo quy ước
@@ -305,10 +308,26 @@
         // Ư, Ứ, Ừ... -> UW
         str = str.replace(/[ƯỨỪỬỮỰ]/g, "UW");
         
-        // Bước 3: Loại bỏ các dấu thanh còn lại (sắc, huyền, hỏi, ngã, nặng)
-        // Ví dụ: Á -> A, É -> E, Í -> I...
+        // Bước 3: Loại bỏ các dấu thanh còn lại
         str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         
+        return str;
+      }
+
+      // ==========================================================
+      // HÀM DỊCH NGƯỢC: TỪ MÃ KHÔNG DẤU (CDD) -> VỀ MÃ GỐC (CĐ)
+      // ==========================================================
+      function restoreVietnameseFromCode(str) {
+        if (!str) return "";
+        str = String(str).trim().toUpperCase();
+        // Quy ước dịch ngược lại để khớp với Database
+        str = str.replace(/DD/g, "Đ");
+        str = str.replace(/AA/g, "Â");
+        str = str.replace(/AW/g, "Ă");
+        str = str.replace(/OO/g, "Ô");
+        str = str.replace(/EE/g, "Ê");
+        str = str.replace(/OW/g, "Ơ");
+        str = str.replace(/UW/g, "Ư");
         return str;
       }
     </script>
