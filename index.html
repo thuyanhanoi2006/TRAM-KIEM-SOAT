@@ -174,8 +174,9 @@
           });
       
           if (code && code.data !== "") {
-            // Luôn chuyển mã quét được về chữ hoa để đồng bộ
-            var processedCode = String(code.data).trim().toUpperCase();
+            // SỬA: Dùng hàm chuẩn hóa tiếng Việt sang không dấu theo quy ước
+            var processedCode = convertVietnameseToCode(code.data);
+
             if (processedCode === lastScannedCode) {
               scanRequestId = requestAnimationFrame(tick);
               return;
@@ -190,8 +191,8 @@
  
       function handleManual() { 
         if (scanState !== "IDLE") return; 
-        // Giữ nguyên việc chuyển chữ hoa để đồng bộ với mã QR
-        var val = document.getElementById('manualInput').value.trim().toUpperCase(); 
+        // SỬA: Dùng hàm chuẩn hóa tiếng Việt khi nhập tay
+        var val = convertVietnameseToCode(document.getElementById('manualInput').value); 
         if(val) { 
           document.getElementById('manualInput').value = '';
           document.getElementById('manualInput').blur(); 
@@ -271,6 +272,45 @@
       function hidePopup() { document.getElementById('status-popup').style.display = 'none'; }
       function speak(text) { window.speechSynthesis.cancel(); var msg = new SpeechSynthesisUtterance(text); msg.lang = 'vi-VN'; msg.rate = 1.1; window.speechSynthesis.speak(msg); }
       function beep() { try { var ctx = new (window.AudioContext || window.webkitAudioContext)(); var o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 1500; o.connect(ctx.destination); o.start(); setTimeout(() => o.stop(), 100); } catch(e) {} }
+
+      // ==========================================================
+      // HÀM CHUYÊN GIA: CHUẨN HÓA MÃ TIẾNG VIỆT SANG KHÔNG DẤU
+      // ==========================================================
+      function convertVietnameseToCode(str) {
+        if (!str) return "";
+        str = String(str).trim().toUpperCase();
+        
+        // Bước 1: Đưa về dạng tổ hợp (NFC) để xử lý các ký tự đặc biệt
+        str = str.normalize("NFC");
+        
+        // Bước 2: Thay thế các ký tự có dấu đặc trưng theo quy ước
+        // Đ -> DD
+        str = str.replace(/[Đ]/g, "DD");
+        
+        // Â, Ấ, Ầ... -> AA
+        str = str.replace(/[ÂẤẦẨẪẬ]/g, "AA");
+        
+        // Ă, Ắ, Ằ... -> AW
+        str = str.replace(/[ĂẮẰẲẴẶ]/g, "AW");
+        
+        // Ô, Ố, Ồ... -> OO
+        str = str.replace(/[ÔỐỒỔỖỘ]/g, "OO");
+        
+        // Ê, Ế, Ề... -> EE
+        str = str.replace(/[ÊẾỀỂỄỆ]/g, "EE");
+        
+        // Ơ, Ớ, Ờ... -> OW
+        str = str.replace(/[ƠỚỜỞỠỢ]/g, "OW");
+        
+        // Ư, Ứ, Ừ... -> UW
+        str = str.replace(/[ƯỨỪỬỮỰ]/g, "UW");
+        
+        // Bước 3: Loại bỏ các dấu thanh còn lại (sắc, huyền, hỏi, ngã, nặng)
+        // Ví dụ: Á -> A, É -> E, Í -> I...
+        str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        return str;
+      }
     </script>
   </body>
 </html>
