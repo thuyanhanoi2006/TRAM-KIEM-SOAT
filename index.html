@@ -74,6 +74,7 @@
       <div id="scanner-container">
         <video id="video" autoplay muted playsinline></video>
         <div id="scan-region"></div>
+        <button id="btn-flash" onclick="toggleFlash()" style="position: absolute; bottom: 10px; right: 10px; z-index: 20; background: rgba(0,0,0,0.5); border: 2px solid #fff; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; color: yellow; display: none; cursor: pointer; transition: 0.3s;">⚡</button>
       </div>
       
       <canvas id="hidden-canvas" style="display:none;"></canvas>
@@ -142,6 +143,16 @@
         currentStream = stream;
         video.srcObject = stream;
         video.setAttribute("playsinline", true); 
+        
+        // KIỂM TRA HỖ TRỢ ĐÈN FLASH (TORCH)
+        const track = stream.getVideoTracks()[0];
+        try {
+          const capabilities = track.getCapabilities();
+          if (capabilities.torch) {
+            document.getElementById('btn-flash').style.display = 'block';
+          }
+        } catch(e) {}
+
         video.play().then(() => {
             scanRequestId = requestAnimationFrame(tick);
           });
@@ -174,16 +185,22 @@
           });
       
           if (code && code.data !== "") {
+            // Luôn chuyển mã quét được về chữ hoa để đồng bộ
+            var processedCode = String(code.data).trim().toUpperCase();
+            
             // XỬ LÝ ĐA CHIỀU: Quét mã (CDD...) -> Dịch ngược lại thành mã gốc (CĐ...)
-            var rawCode = convertVietnameseToCode(code.data); // Đảm bảo đầu vào chuẩn form CDD
-            var processedCode = restoreVietnameseFromCode(rawCode); // Dịch lại về CĐ để khớp Database
+            // 1. Nếu quét mã tiếng Việt gốc (có dấu), hàm convert sẽ chuyển về không dấu.
+            // 2. Nếu quét mã đã mã hóa (CDD...), hàm restore sẽ trả về tiếng Việt gốc.
+            // Để an toàn, ta luôn chuẩn hóa về dạng CDD trước, sau đó Restore về CĐ.
+            var rawCode = convertVietnameseToCode(processedCode); 
+            var finalCode = restoreVietnameseFromCode(rawCode);
 
-            if (processedCode === lastScannedCode) {
+            if (finalCode === lastScannedCode) {
               scanRequestId = requestAnimationFrame(tick);
               return;
             }
       
-            triggerScanProcessing(processedCode);
+            triggerScanProcessing(finalCode);
             return;
           }
         }
@@ -192,14 +209,15 @@
  
       function handleManual() { 
         if (scanState !== "IDLE") return; 
-        // XỬ LÝ ĐA CHIỀU: Nhập tay (kể cả nhập CDD hay CĐ đều hiểu đúng là CĐ)
-        var rawVal = convertVietnameseToCode(document.getElementById('manualInput').value); 
-        var val = restoreVietnameseFromCode(rawVal);
+        // TỐI ƯU HÓA: Nhập tay cũng áp dụng quy tắc dịch ngược
+        var val = document.getElementById('manualInput').value.trim().toUpperCase();
+        var rawVal = convertVietnameseToCode(val); 
+        var finalVal = restoreVietnameseFromCode(rawVal);
 
-        if(val) { 
+        if(finalVal) { 
           document.getElementById('manualInput').value = '';
           document.getElementById('manualInput').blur(); 
-          triggerScanProcessing(val); 
+          triggerScanProcessing(finalVal); 
         }
       }
       
@@ -329,6 +347,21 @@
         str = str.replace(/OW/g, "Ơ");
         str = str.replace(/UW/g, "Ư");
         return str;
+      }
+
+      // ==========================================================
+      // HÀM BẬT/TẮT ĐÈN FLASH (CHẾ ĐỘ BAN ĐÊM)
+      // ==========================================================
+      function toggleFlash() {
+        if (!currentStream) return;
+        const track = currentStream.getVideoTracks()[0];
+        try {
+            const currentSettings = track.getSettings();
+            const isTorchOn = currentSettings.torch;
+            track.applyConstraints({ advanced: [{ torch: !isTorchOn }] });
+            document.getElementById('btn-flash').style.background = !isTorchOn ? "rgba(255, 215, 0, 0.8)" : "rgba(0,0,0,0.5)";
+            document.getElementById('btn-flash').style.color = !isTorchOn ? "#000" : "yellow";
+        } catch(e) { alert("Thiết bị không hỗ trợ điều khiển đèn Flash!"); }
       }
     </script>
   </body>
