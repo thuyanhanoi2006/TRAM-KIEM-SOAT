@@ -24,7 +24,7 @@
         border: 2px solid rgba(255, 255, 255, 0.4); border-radius: 15px; 
         box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6); pointer-events: none; 
       }
- 
+
       #status-popup { position: fixed; top: 15%; left: 50%; transform: translate(-50%, 0); width: 90%; max-width: 400px; padding: 20px; border-radius: 15px; color: white; z-index: 1000; display: none; box-shadow: 0 10px 50px rgba(0,0,0,0.9); border: 2px solid #555; }
       .icon-large { font-size: 60px; display: block; margin-bottom: 10px; }
       #popup-msg { font-size: 22px; font-weight: bold; line-height: 1.3; text-transform: uppercase; }
@@ -74,7 +74,7 @@
       <div id="scanner-container">
         <video id="video" autoplay muted playsinline></video>
         <div id="scan-region"></div>
-        <button id="btn-flash" onclick="toggleFlash()" style="position: absolute; bottom: 10px; right: 10px; z-index: 20; background: rgba(0,0,0,0.5); border: 2px solid #fff; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; color: yellow; display: none; cursor: pointer; transition: 0.3s;">⚡</button>
+        <button id="btn-flash" onclick="toggleFlash()" style="position: absolute; bottom: 10px; right: 10px; z-index: 20; background: rgba(0,0,0,0.5); border: 2px solid #fff; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; color: white; display: none; cursor: pointer; transition: 0.3s;">⚡</button>
       </div>
       
       <canvas id="hidden-canvas" style="display:none;"></canvas>
@@ -145,13 +145,19 @@
         video.setAttribute("playsinline", true); 
         
         // KIỂM TRA HỖ TRỢ ĐÈN FLASH (TORCH)
-        const track = stream.getVideoTracks()[0];
-        try {
-          const capabilities = track.getCapabilities();
-          if (capabilities.torch) {
-            document.getElementById('btn-flash').style.display = 'block';
-          }
-        } catch(e) {}
+        setTimeout(() => {
+            const track = stream.getVideoTracks()[0];
+            try {
+                const capabilities = track.getCapabilities();
+                // Nếu trình duyệt hỗ trợ torch, hoặc không báo cáo nhưng ta cứ thử hiện
+                if (capabilities.torch || 'torch' in capabilities) {
+                    document.getElementById('btn-flash').style.display = 'block';
+                }
+            } catch(e) { 
+                // Một số trình duyệt lỗi khi getCapabilities, vẫn thử hiện nút
+                document.getElementById('btn-flash').style.display = 'block';
+            }
+        }, 500);
 
         video.play().then(() => {
             scanRequestId = requestAnimationFrame(tick);
@@ -187,20 +193,12 @@
           if (code && code.data !== "") {
             // Luôn chuyển mã quét được về chữ hoa để đồng bộ
             var processedCode = String(code.data).trim().toUpperCase();
-            
-            // XỬ LÝ ĐA CHIỀU: Quét mã (CDD...) -> Dịch ngược lại thành mã gốc (CĐ...)
-            // 1. Nếu quét mã tiếng Việt gốc (có dấu), hàm convert sẽ chuyển về không dấu.
-            // 2. Nếu quét mã đã mã hóa (CDD...), hàm restore sẽ trả về tiếng Việt gốc.
-            // Để an toàn, ta luôn chuẩn hóa về dạng CDD trước, sau đó Restore về CĐ.
-            var rawCode = convertVietnameseToCode(processedCode); 
-            var finalCode = restoreVietnameseFromCode(rawCode);
-
-            if (finalCode === lastScannedCode) {
+            if (processedCode === lastScannedCode) {
               scanRequestId = requestAnimationFrame(tick);
               return;
             }
       
-            triggerScanProcessing(finalCode);
+            triggerScanProcessing(processedCode);
             return;
           }
         }
@@ -210,20 +208,22 @@
       function handleManual() { 
         if (scanState !== "IDLE") return; 
         // TỐI ƯU HÓA: Nhập tay cũng áp dụng quy tắc dịch ngược
-        var val = document.getElementById('manualInput').value.trim().toUpperCase();
-        var rawVal = convertVietnameseToCode(val); 
-        var finalVal = restoreVietnameseFromCode(rawVal);
+        var rawVal = convertVietnameseToCode(document.getElementById('manualInput').value); 
+        var val = restoreVietnameseFromCode(rawVal);
 
-        if(finalVal) { 
+        if(val) { 
           document.getElementById('manualInput').value = '';
           document.getElementById('manualInput').blur(); 
-          triggerScanProcessing(finalVal); 
+          triggerScanProcessing(val); 
         }
       }
       
       function triggerScanProcessing(codeString) {
         scanState = "PROCESSING"; 
-        lastScannedCode = codeString;
+        // Xử lý đa chiều: CDD -> CĐ trước khi gửi đi xử lý
+        var rawCode = convertVietnameseToCode(codeString); 
+        var finalCode = restoreVietnameseFromCode(rawCode);
+        lastScannedCode = finalCode; // Lưu mã đã xử lý để tránh quét lặp
         
         document.getElementById('processing-badge').style.display = 'inline-block';
         
@@ -232,7 +232,7 @@
         setTimeout(() => container.style.borderColor = "#555", 500);
         
         beep();
-        handleProcess(codeString);
+        handleProcess(finalCode);
       }
       
       function handleProcess(code) {
@@ -359,9 +359,19 @@
             const currentSettings = track.getSettings();
             const isTorchOn = currentSettings.torch;
             track.applyConstraints({ advanced: [{ torch: !isTorchOn }] });
-            document.getElementById('btn-flash').style.background = !isTorchOn ? "rgba(255, 215, 0, 0.8)" : "rgba(0,0,0,0.5)";
-            document.getElementById('btn-flash').style.color = !isTorchOn ? "#000" : "yellow";
-        } catch(e) { alert("Thiết bị không hỗ trợ điều khiển đèn Flash!"); }
+            // Cập nhật giao diện nút
+            const btn = document.getElementById('btn-flash');
+            if (!isTorchOn) {
+                btn.style.background = "rgba(255, 215, 0, 0.8)";
+                btn.style.color = "#000";
+            } else {
+                btn.style.background = "rgba(0,0,0,0.5)";
+                btn.style.color = "white";
+            }
+        } catch(e) { 
+            console.error(e);
+            alert("Thiết bị không hỗ trợ điều khiển đèn Flash!"); 
+        }
       }
     </script>
   </body>
